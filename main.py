@@ -147,7 +147,7 @@ async def on_ready():
                 "@maloneyman Please don't fire me, I'm working now.")
 
     scheduler.add_job(test_message,
-                      CronTrigger(hour=14, minute=50, timezone=eastern))
+                      CronTrigger(hour=15, minute=10, timezone=eastern))
 
     scheduler.start()
     print("✅ Scheduler started.")
