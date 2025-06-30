@@ -116,7 +116,7 @@ async def on_ready():
         if channel:
             await channel.send("@maloneyman Please don't fire me, I'm working now.")
 
-    scheduler.add_job(test_message, CronTrigger(hour=14, minute=50, timezone=eastern))
+    scheduler.add_job(test_message, CronTrigger(hour=15, minute=14, timezone=eastern))
     scheduler.start()
 
     print("✅ Scheduler started.")
