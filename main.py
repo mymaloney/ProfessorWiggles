@@ -111,12 +111,6 @@ async def on_ready():
     scheduler.add_job(send_dog, CronTrigger(hour=6, minute=0, timezone=eastern))
     scheduler.add_job(send_poem, CronTrigger(hour=6, minute=5, timezone=eastern))
 
-    async def test_message():
-        channel = bot.get_channel(CHANNEL_ID)
-        if channel:
-            await channel.send("@maloneyman Please don't fire me, I'm working now.")
-
-    scheduler.add_job(test_message, CronTrigger(hour=15, minute=14, timezone=eastern))
     scheduler.start()
 
     print("✅ Scheduler started.")
