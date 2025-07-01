@@ -66,23 +66,29 @@ async def send_poem(target_channel=None):
                     await target_channel.send("Could not extract the poem text.")
                     return
 
-                for br in poem_div.find_all('br'):
-                    next_sibling = br.find_next_sibling()
-                    if next_sibling and next_sibling.name == 'br':
-                        br.replace_with('\n\n')
+                # --- BEGIN NEW LINEBREAK CLEANUP LOGIC ---
+                br_tags = poem_div.find_all('br')
+                i = 0
+                while i < len(br_tags):
+                    br = br_tags[i]
+                    next_elem = br.find_next_sibling()
+                    if next_elem and next_elem.name == 'br':
+                        next_elem.extract()
+                        br.replace_with('<br>')  # Keep one
+                        i += 1  # Skip past the pair
                     else:
                         br.extract()
-                
+                    i += 1
+                # --- END LINEBREAK CLEANUP ---
+
                 # Replace non-breaking spaces
                 for elem in poem_div.find_all(text=True):
                     elem.replace_with(elem.replace('\xa0', ' '))
-                
-                # Use ''.join() to avoid extra line breaks
-                poem_text = ''.join(poem_div.strings).strip()
-                
-                # Normalize any excessive newlines
-                poem_text = re.sub(r'\n{3,}', '\n\n', poem_text)
 
+                poem_text = poem_div.decode_contents()
+                poem_text = poem_text.replace('<br>', '\n\n')
+                poem_text = BeautifulSoup(poem_text, 'html.parser').get_text()
+                poem_text = poem_text.strip()
 
             intro = f"**{title}** by *{author}*\n<{poem_url}>"
             await target_channel.send(intro)
@@ -122,4 +128,3 @@ async def on_ready():
 
 
 bot.run(TOKEN)
-
