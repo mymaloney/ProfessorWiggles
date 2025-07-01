@@ -61,7 +61,7 @@ async def send_poem(target_channel=None):
                 author = author_spans[-1].text.strip() if author_spans else (
                     author_tag.text.strip() if author_tag else "Unknown")
 
-                poem_div = poem_soup.select_one('div.rich-text')
+                poem_div = poem_soup.select_one('div.rich-text.col-span-full')
                 if not poem_div:
                     await target_channel.send("Could not extract the poem text.")
                     return
