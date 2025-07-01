@@ -46,15 +46,8 @@ async def send_poem(target_channel=None):
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://www.poetryfoundation.org/poems/poem-of-the-day") as resp:
-                html = await resp.text()
-                soup = BeautifulSoup(html, 'html.parser')
-
-                poem_link_tag = soup.select_one('a[href^="/poetrymagazine/poems/"]')
-                if not poem_link_tag:
-                    await target_channel.send("Could not find the poem link.")
-                    return
-                poem_url = "https://www.poetryfoundation.org" + poem_link_tag['href']
+            async with session.get("https://www.poetryfoundation.org/poems/poem-of-the-day", allow_redirects=True) as resp:
+                poem_url = str(resp.url)
 
             async with session.get(poem_url) as poem_resp:
                 poem_html = await poem_resp.text()
