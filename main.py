@@ -66,22 +66,23 @@ async def send_poem(target_channel=None):
                     await target_channel.send("Could not extract the poem text.")
                     return
 
-                # Convert multiple <br> tags into stanza breaks, ignore single ones
                 for br in poem_div.find_all('br'):
                     next_sibling = br.find_next_sibling()
                     if next_sibling and next_sibling.name == 'br':
-                        br.replace_with('\n\n')  # stanza break
+                        br.replace_with('\n\n')
                     else:
-                        br.extract()  # formatting break
-
+                        br.extract()
+                
                 # Replace non-breaking spaces
                 for elem in poem_div.find_all(text=True):
                     elem.replace_with(elem.replace('\xa0', ' '))
-
-                poem_text = poem_div.get_text(separator="\n").strip()
-
-                # Normalize excessive newlines
+                
+                # Use ''.join() to avoid extra line breaks
+                poem_text = ''.join(poem_div.strings).strip()
+                
+                # Normalize any excessive newlines
                 poem_text = re.sub(r'\n{3,}', '\n\n', poem_text)
+
 
             intro = f"**{title}** by *{author}*\n<{poem_url}>"
             await target_channel.send(intro)
