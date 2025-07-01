@@ -66,21 +66,38 @@ async def send_poem(target_channel=None):
                     await target_channel.send("Could not extract the poem text.")
                     return
 
-                # Replace all <br> with [[BR]] to preserve intended stanza breaks
-                for br in poem_div.find_all("br"):
-                    br.replace_with("[[BR]]")
+                # === HERE: Fix <br> tags according to your rules ===
+                br_tags = poem_div.find_all('br')
+                i = 0
+                while i < len(br_tags):
+                    current_br = br_tags[i]
+                    consecutive = [current_br]
+                    j = i + 1
+                    while j < len(br_tags) and br_tags[j].find_previous_sibling() == br_tags[j-1]:
+                        consecutive.append(br_tags[j])
+                        j += 1
+
+                    if len(consecutive) >= 2:
+                        # Keep only the first <br> in the consecutive block
+                        for br_to_remove in consecutive[1:]:
+                            br_to_remove.decompose()
+                        i = j
+                    else:
+                        # Single <br> tag: remove it
+                        current_br.decompose()
+                        i += 1
+
+                    br_tags = poem_div.find_all('br')
+
+                # Replace remaining <br> with a newline
+                for br in poem_div.find_all('br'):
+                    br.replace_with('\n')
 
                 # Replace non-breaking spaces
                 for elem in poem_div.find_all(text=True):
                     elem.replace_with(elem.replace('\xa0', ' '))
 
-                # Convert to text and process line breaks
-                raw_text = poem_div.get_text()
-                # Replace double [[BR]] with one [[BR]], and remove singles
-                raw_text = re.sub(r'(\[\[BR\]]){2,}', '[[BR]]', raw_text)
-                raw_text = raw_text.replace('[[BR]]', '\n\n')
-
-                poem_text = raw_text.strip()
+                poem_text = poem_div.get_text().strip()
 
             intro = f"**{title}** by *{author}*\n<{poem_url}>"
             await target_channel.send(intro)
@@ -92,7 +109,7 @@ async def send_poem(target_channel=None):
     except Exception as e:
         print(f"Error fetching poem: {e}")
         await target_channel.send("An error occurred while fetching the poem.")
-
+        
 @bot.command()
 async def dog(ctx):
     await send_dog()
