@@ -24,6 +24,16 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 scheduler = AsyncIOScheduler()
 
+async def schedule_daily_poem():
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        now = datetime.datetime.now()
+        # Set the target time for 1:00 AM
+        target = now.replace(hour=1, minute=0, second=0, microsecond=0)
+        if now >= target:
+            target += datetime.timedelta(days=1)
+        wait_seconds = (target - now).total_seconds()
+        await asyncio.sleep(wait_seconds)
 
 async def send_dog():
     channel = bot.get_channel(CHANNEL_ID)
@@ -36,6 +46,14 @@ async def send_dog():
         except Exception as e:
             print(f"Failed to send dog image: {e}")
 
+async def cat(ctx):
+    url = "https://api.thecatapi.com/v1/images/search"
+    headers = {"x-api-key": "live_IVLwPo7y4QmgTfaX4LbCUEkfVhKxJHjgV6IE0PhHPp2oYx4hqRC1qSb9q4nz6NAI"}  # Optional, but good if you sign up
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as resp:
+            data = await resp.json()
+            cat_url = data[0]["url"]
+            await ctx.send(cat_url)
 
 async def send_poem(target_channel=None):
     if target_channel is None:
