@@ -46,15 +46,6 @@ async def send_dog():
         except Exception as e:
             print(f"Failed to send dog image: {e}")
 
-async def cat(ctx):
-    url = "https://api.thecatapi.com/v1/images/search"
-    headers = {"x-api-key": "live_IVLwPo7y4QmgTfaX4LbCUEkfVhKxJHjgV6IE0PhHPp2oYx4hqRC1qSb9q4nz6NAI"}  # Optional, but good if you sign up
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as resp:
-            data = await resp.json()
-            cat_url = data[0]["url"]
-            await ctx.send(cat_url)
-
 async def send_poem(target_channel=None):
     if target_channel is None:
         target_channel = bot.get_channel(POEM_CHANNEL_ID)
@@ -132,6 +123,15 @@ async def send_poem(target_channel=None):
 async def dog(ctx):
     await send_dog()
 
+@bot.command()
+async def cat(ctx):
+    url = "https://api.thecatapi.com/v1/images/search"
+    headers = {"x-api-key": "live_IVLwPo7y4QmgTfaX4LbCUEkfVhKxJHjgV6IE0PhHPp2oYx4hqRC1qSb9q4nz6NAI"}  # Optional, but good if you sign up
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as resp:
+            data = await resp.json()
+            cat_url = data[0]["url"]
+            await ctx.send(cat_url)
 
 @bot.command()
 async def poem(ctx):
