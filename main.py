@@ -8,6 +8,8 @@ from bs4 import BeautifulSoup
 import re
 from flask import Flask
 import threading
+import datetime
+import asyncio
 
 app = Flask(__name__)
 
@@ -38,21 +40,35 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 scheduler = AsyncIOScheduler()
 
-async def schedule_daily_poem():
-    await bot.wait_until_ready()
-    while not bot.is_closed():
-        now = datetime.datetime.now()
-        # Set the target time for 1:00 AM
-        target = now.replace(hour=1, minute=0, second=0, microsecond=0)
-        if now >= target:
-            target += datetime.timedelta(days=1)
-        wait_seconds = (target - now).total_seconds()
-        await asyncio.sleep(wait_seconds)
+def html_to_discord_markdown(soup):
+    # Italic: <i> or <em> -> *text*
+    for tag in soup.find_all(['i', 'em']):
+        tag.insert_before('*')
+        tag.insert_after('*')
+        tag.unwrap()
 
-async def send_dog(channel=None):
-    # If no channel passed, use the default dog channel
-    if channel is None:
-        channel = bot.get_channel(CHANNEL_ID)
+    # Bold: <b> or <strong> -> **text**
+    for tag in soup.find_all(['b', 'strong']):
+        tag.insert_before('**')
+        tag.insert_after('**')
+        tag.unwrap()
+
+    # Underline: <u> -> __text__
+    for tag in soup.find_all('u'):
+        tag.insert_before('__')
+        tag.insert_after('__')
+        tag.unwrap()
+
+    # Strikethrough: <s> or <del> -> ~~text~~
+    for tag in soup.find_all(['s', 'del']):
+        tag.insert_before('~~')
+        tag.insert_after('~~')
+        tag.unwrap()
+
+    return soup
+
+async def send_dog():
+    channel = bot.get_channel(CHANNEL_ID)
     if channel:
         try:
             async with aiohttp.ClientSession() as session:
@@ -91,34 +107,38 @@ async def send_poem(target_channel=None):
                     await target_channel.send("Could not extract the poem text.")
                     return
 
-                # === HERE: Fix <br> tags according to your rules ===
+                # Convert HTML tags to Discord markdown
+                poem_div = html_to_discord_markdown(poem_div)
+
+                # Fix <br> tags: remove single <br>, collapse consecutive <br><br> into single <br>
                 br_tags = poem_div.find_all('br')
                 i = 0
                 while i < len(br_tags):
                     current_br = br_tags[i]
                     consecutive = [current_br]
                     j = i + 1
-                    while j < len(br_tags) and br_tags[j].find_previous_sibling() == br_tags[j-1]:
+                    # Check for consecutive <br> siblings
+                    while j < len(br_tags) and br_tags[j].previous_sibling == br_tags[j-1]:
                         consecutive.append(br_tags[j])
                         j += 1
 
                     if len(consecutive) >= 2:
-                        # Keep only the first <br> in the consecutive block
+                        # Keep only one <br>, remove rest
                         for br_to_remove in consecutive[1:]:
                             br_to_remove.decompose()
                         i = j
                     else:
-                        # Single <br> tag: remove it
+                        # Single <br>: remove it
                         current_br.decompose()
                         i += 1
 
                     br_tags = poem_div.find_all('br')
 
-                # Replace remaining <br> with a newline
+                # Replace remaining <br> with newline characters
                 for br in poem_div.find_all('br'):
                     br.replace_with('\n')
 
-                # Replace non-breaking spaces
+                # Replace non-breaking spaces with normal spaces
                 for elem in poem_div.find_all(text=True):
                     elem.replace_with(elem.replace('\xa0', ' '))
 
@@ -134,16 +154,23 @@ async def send_poem(target_channel=None):
     except Exception as e:
         print(f"Error fetching poem: {e}")
         await target_channel.send("An error occurred while fetching the poem.")
-        
+
 @bot.command()
 async def dog(ctx):
-    # Send dog image to the channel where command was invoked
-    await send_dog(ctx.channel)
+    # Send dog image to channel where command was issued
+    channel = ctx.channel
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://dog.ceo/api/breeds/image/random") as resp:
+                data = await resp.json()
+                await channel.send(data["message"])
+    except Exception as e:
+        await channel.send(f"Failed to fetch dog image: {e}")
 
 @bot.command()
 async def cat(ctx):
     url = "https://api.thecatapi.com/v1/images/search"
-    headers = {"x-api-key": "live_IVLwPo7y4QmgTfaX4LbCUEkfVhKxJHjgV6IE0PhHPp2oYx4hqRC1qSb9q4nz6NAI"}  # Optional, but good if you sign up
+    headers = {"x-api-key": "live_IVLwPo7y4QmgTfaX4LbCUEkfVhKxJHjgV6IE0PhHPp2oYx4hqRC1qSb9q4nz6NAI"}  # Optional
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as resp:
             data = await resp.json()
@@ -154,7 +181,6 @@ async def cat(ctx):
 async def poem(ctx):
     await send_poem(ctx.channel)
 
-
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
@@ -162,12 +188,14 @@ async def on_ready():
 
     eastern = ZoneInfo("America/New_York")
 
+    # Schedule daily dog image to fixed channel
     scheduler.add_job(send_dog, CronTrigger(hour=6, minute=0, timezone=eastern))
+
+    # Schedule daily poem to fixed poem channel
     scheduler.add_job(send_poem, CronTrigger(hour=6, minute=5, timezone=eastern))
 
     scheduler.start()
 
     print("✅ Scheduler started.")
-
 
 bot.run(TOKEN)
