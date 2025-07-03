@@ -49,8 +49,10 @@ async def schedule_daily_poem():
         wait_seconds = (target - now).total_seconds()
         await asyncio.sleep(wait_seconds)
 
-async def send_dog():
-    channel = bot.get_channel(CHANNEL_ID)
+async def send_dog(channel=None):
+    # If no channel passed, use the default dog channel
+    if channel is None:
+        channel = bot.get_channel(CHANNEL_ID)
     if channel:
         try:
             async with aiohttp.ClientSession() as session:
@@ -135,7 +137,8 @@ async def send_poem(target_channel=None):
         
 @bot.command()
 async def dog(ctx):
-    await send_dog()
+    # Send dog image to the channel where command was invoked
+    await send_dog(ctx.channel)
 
 @bot.command()
 async def cat(ctx):
