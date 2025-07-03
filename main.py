@@ -6,6 +6,20 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from bs4 import BeautifulSoup
 import re
+from flask import Flask
+import threading
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot is running."
+
+def run_web():
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
+# Start the keep-alive web server in a thread
+threading.Thread(target=run_web).start()
 
 # Use zoneinfo for Python 3.9+, else fallback to pytz
 try:
