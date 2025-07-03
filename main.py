@@ -107,38 +107,25 @@ async def send_poem(target_channel=None):
                     await target_channel.send("Could not extract the poem text.")
                     return
 
-                # Convert HTML tags to Discord markdown
-                poem_div = html_to_discord_markdown(poem_div)
-
-                # Fix <br> tags: remove single <br>, collapse consecutive <br><br> into single <br>
+                # === Fixed <br> handling ===
                 br_tags = poem_div.find_all('br')
                 i = 0
                 while i < len(br_tags):
                     current_br = br_tags[i]
                     consecutive = [current_br]
                     j = i + 1
-                    # Check for consecutive <br> siblings
+                    # Collect consecutive sibling <br> tags
                     while j < len(br_tags) and br_tags[j].previous_sibling == br_tags[j-1]:
                         consecutive.append(br_tags[j])
                         j += 1
+                    # Remove all but first <br>
+                    for br_to_remove in consecutive[1:]:
+                        br_to_remove.decompose()
+                    # Replace the first <br> with a newline text node
+                    consecutive[0].replace_with('\n')
+                    i = j
 
-                    if len(consecutive) >= 2:
-                        # Keep only one <br>, remove rest
-                        for br_to_remove in consecutive[1:]:
-                            br_to_remove.decompose()
-                        i = j
-                    else:
-                        # Single <br>: remove it
-                        current_br.decompose()
-                        i += 1
-
-                    br_tags = poem_div.find_all('br')
-
-                # Replace remaining <br> with newline characters
-                for br in poem_div.find_all('br'):
-                    br.replace_with('\n')
-
-                # Replace non-breaking spaces with normal spaces
+                # Replace non-breaking spaces (&nbsp;) with regular spaces
                 for elem in poem_div.find_all(text=True):
                     elem.replace_with(elem.replace('\xa0', ' '))
 
@@ -147,6 +134,7 @@ async def send_poem(target_channel=None):
             intro = f"**{title}** by *{author}*\n<{poem_url}>"
             await target_channel.send(intro)
 
+            # Send poem in chunks if too long
             chunks = [poem_text[i:i + 1900] for i in range(0, len(poem_text), 1900)]
             for chunk in chunks:
                 await target_channel.send(chunk)
