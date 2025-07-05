@@ -10,6 +10,7 @@ from flask import Flask
 import threading
 import datetime
 import asyncio
+import random
 
 app = Flask(__name__)
 
@@ -168,6 +169,37 @@ async def cat(ctx):
 @bot.command()
 async def poem(ctx):
     await send_poem(ctx.channel)
+
+@bot.command()
+async def grade(ctx):
+    if not ctx.message.attachments:
+        await ctx.send("Awooo? You didn't submit anything!")
+        return
+
+    grading_msg = await ctx.send("Grading...")
+
+    wait_time = random.randint(1, 360)  # 1 second to 6 minutes
+    await asyncio.sleep(wait_time)
+
+    grades = [
+        "Uh. Okay. B.",
+        "Really a little... pedestrian, don't you think? C.",
+        "You could have done a little better and you know it. A reluctant B minus.",
+        "Oh, fuck, no! Get this shit out of my sight! F.",
+        "I mean, it's better than what I did at your age. B plus.",
+        "Go check out #literature and think a bit about what you read there. C.",
+        "Fine, but this is strike two. B plus.",
+        "My god... it so shit I shit. No good. F.",
+        "I'm calling the Dean. D. For Dean.",
+        "I mean… you tried. A for effort. But C.",
+        "It made me laugh.... I mean, really, laugh... A plus.",
+        "Hate has no place here, youngster. F minus.",
+        "It's giving.... A plus.",
+        "Innoffensive. D."
+    ]
+
+    response = random.choice(grades)
+    await grading_msg.edit(content=response)
 
 @bot.event
 async def on_ready():
