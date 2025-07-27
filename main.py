@@ -109,20 +109,9 @@ async def fetch_poem():
                 if not poem_div:
                     return None, None, poem_url
 
-                # Process <br> tags to \n
-                br_tags = poem_div.find_all('br')
-                i = 0
-                while i < len(br_tags):
-                    current_br = br_tags[i]
-                    consecutive = [current_br]
-                    j = i + 1
-                    while j < len(br_tags) and br_tags[j].previous_sibling == br_tags[j - 1]:
-                        consecutive.append(br_tags[j])
-                        j += 1
-                    for br_to_remove in consecutive[1:]:
-                        br_to_remove.decompose()
-                    consecutive[0].replace_with('\n')
-                    i = j
+                # Remove all <br> tags entirely — they're misleading on Poetry Foundation
+                for br in poem_div.find_all('br'):
+                    br.decompose()
 
                 # Replace non-breaking spaces
                 for elem in poem_div.find_all(text=True):
