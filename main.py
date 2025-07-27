@@ -12,6 +12,8 @@ import datetime
 import asyncio
 import random
 
+poem_cache = {}
+
 app = Flask(__name__)
 
 @app.route("/")
@@ -79,12 +81,12 @@ async def send_dog():
         except Exception as e:
             print(f"Failed to send dog image: {e}")
 
-async def send_poem(target_channel=None):
-    if target_channel is None:
-        target_channel = bot.get_channel(POEM_CHANNEL_ID)
-    if not target_channel:
-        print("Poem channel not found.")
-        return
+
+# ==== New function to fetch and cache the poem ====
+async def fetch_poem():
+    today = datetime.date.today().isoformat()
+    if today in poem_cache:
+        return poem_cache[today]
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -105,44 +107,56 @@ async def send_poem(target_channel=None):
 
                 poem_div = poem_soup.select_one('div.rich-text.col-span-full')
                 if not poem_div:
-                    await target_channel.send("Could not extract the poem text.")
-                    return
+                    return None, None, poem_url
 
-                # === Fixed <br> handling ===
+                # Process <br> tags to \n
                 br_tags = poem_div.find_all('br')
                 i = 0
                 while i < len(br_tags):
                     current_br = br_tags[i]
                     consecutive = [current_br]
                     j = i + 1
-                    # Collect consecutive sibling <br> tags
-                    while j < len(br_tags) and br_tags[j].previous_sibling == br_tags[j-1]:
+                    while j < len(br_tags) and br_tags[j].previous_sibling == br_tags[j - 1]:
                         consecutive.append(br_tags[j])
                         j += 1
-                    # Remove all but first <br>
                     for br_to_remove in consecutive[1:]:
                         br_to_remove.decompose()
-                    # Replace the first <br> with a newline text node
                     consecutive[0].replace_with('\n')
                     i = j
 
-                # Replace non-breaking spaces (&nbsp;) with regular spaces
+                # Replace non-breaking spaces
                 for elem in poem_div.find_all(text=True):
                     elem.replace_with(elem.replace('\xa0', ' '))
 
                 poem_text = poem_div.get_text().strip()
+                intro = f"**{title}** by *{author}*\n<{poem_url}>"
+                chunks = [poem_text[i:i + 1900] for i in range(0, len(poem_text), 1900)]
 
-            intro = f"**{title}** by *{author}*\n<{poem_url}>"
-            await target_channel.send(intro)
-
-            # Send poem in chunks if too long
-            chunks = [poem_text[i:i + 1900] for i in range(0, len(poem_text), 1900)]
-            for chunk in chunks:
-                await target_channel.send(chunk)
+                # Cache it
+                poem_cache[today] = (intro, chunks, poem_url)
+                return intro, chunks, poem_url
 
     except Exception as e:
         print(f"Error fetching poem: {e}")
+        return None, None, None
+
+# ==== Update send_poem to use the cache ====
+async def send_poem(target_channel=None):
+    if target_channel is None:
+        target_channel = bot.get_channel(POEM_CHANNEL_ID)
+    if not target_channel:
+        print("Poem channel not found.")
+        return
+
+    intro, chunks, poem_url = await fetch_poem()
+
+    if not intro:
         await target_channel.send("An error occurred while fetching the poem.")
+        return
+
+    await target_channel.send(intro)
+    for chunk in chunks:
+        await target_channel.send(chunk)
 
 @bot.command()
 async def dog(ctx):
