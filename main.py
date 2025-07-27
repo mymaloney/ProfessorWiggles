@@ -157,6 +157,7 @@ async def send_poem(target_channel=None):
     await target_channel.send(intro)
     for chunk in chunks:
         await target_channel.send(chunk)
+        await asyncio.sleep(1.5)  # Discord rate limit is ~5 requests/5 sec globally; this is safe
 
 @bot.command()
 async def dog(ctx):
