@@ -107,6 +107,22 @@ async def fetch_poem():
         print(f"Oops, scraping flopped: {e}")
         return None, None, None
 
+async def send_poem(channel=None):
+    if channel is None:
+        channel = bot.get_channel(POEM_CHANNEL_ID)
+    if channel is None:
+        print("Poem channel not found!")
+        return
+
+    intro, chunks, pretty = await fetch_poem()
+    if not chunks:
+        await channel.send("Failed to fetch today's poem.")
+        return
+
+    for chunk in chunks:
+        await channel.send(chunk)
+
+
 @bot.command()
 async def dog(ctx):
     # Send dog image to channel where command was issued
