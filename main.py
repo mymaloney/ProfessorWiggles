@@ -11,6 +11,15 @@ import threading
 import datetime
 import asyncio
 import random
+import ssl
+
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
+
+async with aiohttp.ClientSession() as session:
+    async with session.get(URL, headers={"User-Agent": "Mozilla/5.0"}, ssl=ssl_context) as resp:
+        html = await resp.text()
 
 poem_cache = {}
 
@@ -66,11 +75,10 @@ async def fetch_poem():
     URL = "https://poems.com/todays-poem"
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(URL, headers={"User-Agent": "Mozilla/5.0"}) as resp:
-                if resp.status != 200:
-                    print(f"Failed to fetch poem page: status {resp.status}")
-                    return None, None, None
-                html = await resp.text()
+                async with session.get(URL, headers={"User-Agent": "Mozilla/5.0"}) as resp:
+                    print(f"[DEBUG] Fetch status: {resp.status}")
+                    html = await resp.text()
+                    print(f"[DEBUG] HTML snippet: {html[:500]}")
 
         soup = BeautifulSoup(html, "lxml")
 
@@ -102,7 +110,7 @@ async def fetch_poem():
 
         poem_cache[today] = (intro, chunks, pretty)
         return intro, chunks, pretty
-
+        
     except Exception as e:
         print(f"Oops, scraping flopped: {e}")
         return None, None, None
