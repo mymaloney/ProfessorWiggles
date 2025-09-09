@@ -5,21 +5,12 @@ from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from bs4 import BeautifulSoup
-import re
 from flask import Flask
 import threading
 import datetime
 import asyncio
 import random
 import ssl
-
-ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
-
-async with aiohttp.ClientSession() as session:
-    async with session.get(URL, headers={"User-Agent": "Mozilla/5.0"}, ssl=ssl_context) as resp:
-        html = await resp.text()
 
 poem_cache = {}
 
@@ -41,7 +32,6 @@ try:
 except ImportError:
     from pytz import timezone as ZoneInfo
 
-# Bot setup
 TOKEN = os.environ["TOKEN"]
 CHANNEL_ID = 1362449863513473339
 POEM_CHANNEL_ID = 1362377128556888164
@@ -51,6 +41,11 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 scheduler = AsyncIOScheduler()
+
+# Create SSL context that ignores certificate errors (for hosted environments)
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
 
 async def send_dog():
     channel = bot.get_channel(CHANNEL_ID)
@@ -73,12 +68,16 @@ async def fetch_poem():
         return poem_cache[today]
 
     URL = "https://poems.com/todays-poem"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+
     try:
         async with aiohttp.ClientSession() as session:
-                async with session.get(URL, headers={"User-Agent": "Mozilla/5.0"}) as resp:
-                    print(f"[DEBUG] Fetch status: {resp.status}")
-                    html = await resp.text()
-                    print(f"[DEBUG] HTML snippet: {html[:500]}")
+            async with session.get(URL, headers=headers, ssl=ssl_context) as resp:
+                print(f"[DEBUG] Fetch status: {resp.status}")
+                html = await resp.text()
+                print(f"[DEBUG] HTML snippet: {html[:500]}")  # Log first 500 chars for debugging
 
         soup = BeautifulSoup(html, "lxml")
 
@@ -97,7 +96,8 @@ async def fetch_poem():
                 br.replace_with("\n")
             poem_text = "\n".join(s.strip() for s in poem_tag.stripped_strings)
         else:
-            poem_text = ""
+            print("[WARNING] Poem content not found, sending fallback text.")
+            poem_text = "Today's poem could not be fetched. 😢"
 
         # Format pretty block
         lines = poem_text.splitlines()
@@ -110,10 +110,11 @@ async def fetch_poem():
 
         poem_cache[today] = (intro, chunks, pretty)
         return intro, chunks, pretty
-        
+
     except Exception as e:
         print(f"Oops, scraping flopped: {e}")
-        return None, None, None
+        fallback_text = "Today's poem could not be fetched due to an error. 😢"
+        return "Poem Unavailable", [fallback_text], fallback_text
 
 async def send_poem(channel=None):
     if channel is None:
@@ -130,10 +131,8 @@ async def send_poem(channel=None):
     for chunk in chunks:
         await channel.send(chunk)
 
-
 @bot.command()
 async def dog(ctx):
-    # Send dog image to channel where command was issued
     channel = ctx.channel
     try:
         async with aiohttp.ClientSession() as session:
@@ -165,7 +164,7 @@ async def grade(ctx):
 
     grading_msg = await ctx.send("Grading...")
 
-    wait_time = random.randint(1, 360)  # 1 second to 6 minutes
+    wait_time = random.randint(1, 360)
     await asyncio.sleep(wait_time)
 
     grades = [
@@ -195,14 +194,10 @@ async def on_ready():
 
     eastern = ZoneInfo("America/New_York")
 
-    # Schedule daily dog image to fixed channel
     scheduler.add_job(send_dog, CronTrigger(hour=6, minute=0, timezone=eastern))
-
-    # Schedule daily poem to fixed poem channel
     scheduler.add_job(send_poem, CronTrigger(hour=6, minute=5, timezone=eastern))
 
     scheduler.start()
-
     print("✅ Scheduler started.")
 
 bot.run(TOKEN)
