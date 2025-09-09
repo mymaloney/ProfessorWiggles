@@ -59,26 +59,18 @@ async def fetch_poem():
     if today in poem_cache:
         return poem_cache[today]
 
-    url = "https://poems.one/api/poem/"  # Poems API endpoint
+    url = "https://poems.one/api/poem/"  # same as Node's `./api`
 
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
-                text = await resp.text()
-                print("DEBUG Poems.one raw response:", text)  # ✅ full JSON log
-
                 if resp.status != 200:
-                    print(f"Failed to fetch poem, status {resp.status}")
+                    print(f"❌ Failed to fetch poem, status {resp.status}")
                     return None, None, None
 
-                # Parse JSON
-                try:
-                    data = await resp.json()
-                except Exception as e:
-                    print(f"Failed to parse JSON: {e}")
-                    return None, None, None
+                data = await resp.json()
 
-        # Extract poem safely
+        # The API returns poems inside contents.poems
         poem = None
         if "contents" in data and "poems" in data["contents"]:
             poems = data["contents"]["poems"]
@@ -89,26 +81,41 @@ async def fetch_poem():
             print("No poem found in API response.")
             return None, None, None
 
-        # Extract fields with defaults
+        # Extract title, author, content/url
         title = poem.get("title", "Untitled")
-        author = poem.get("author", "Unknown")
-        lines = poem.get("lines", [])
+        author = poem.get("author", "Unknown").strip()
+        content = poem.get("content") or poem.get("lines", [])
+        url_field = poem.get("url", "")
 
-        # Convert lines to text
-        poem_text = "\n".join(lines) if isinstance(lines, list) else str(lines)
+        if isinstance(content, list):
+            poem_text = "\n".join(content)
+        else:
+            poem_text = str(content)
 
+        # Format like Node script
+        lines = poem_text.split("\n")
+        max_len = max((len(line) for line in lines), default=0)
+        separator = "-" * max_len
+
+        formatted = (
+            f'"{title}"\n'
+            f"by {author}\n"
+            f"{separator}\n\n"
+            f"{poem_text}\n\n"
+            f"({url_field})"
+        )
+
+        # Intro for Discord
         intro = f"**{title}** by *{author}*"
-        # Split into chunks for long messages
         chunks = [poem_text[i:i + 1900] for i in range(0, len(poem_text), 1900)]
 
-        # Cache result
-        poem_cache[today] = (intro, chunks, None)
-        return intro, chunks, None
+        # Cache
+        poem_cache[today] = (intro, chunks, formatted)
+        return intro, chunks, formatted
 
     except Exception as e:
         print(f"Error fetching poem: {e}")
         return None, None, None
-
 
 # ==== Send daily poem ====
 async def send_poem(target_channel=None):
