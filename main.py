@@ -53,96 +53,64 @@ async def send_dog():
                     await channel.send(data["message"])
         except Exception as e:
             print(f"Failed to send dog image: {e}")
-# === Fresh rewrite of poem fetching + sending ===
 
 async def fetch_poem():
     """
-    Grab a poem from poems.one. Returns (intro, chunks, pretty).
-    Uses caching so we only fetch once per day.
+    Scrapes the daily poem from poems.com and returns
+    (intro, chunks, pretty_block).
+    Mimics the scraping logic from sdgluck/daily-poem.
     """
     today = datetime.date.today().isoformat()
     if today in poem_cache:
         return poem_cache[today]
 
-    api_url = "https://poems.one/api/poem/"
-    poem_data = None
-
+    target_url = "http://poems.com/poem-of-the-day" 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url) as resp:
+            async with session.get(target_url) as resp:
                 if resp.status != 200:
-                    print(f"Poem fetch failed with status {resp.status}")
+                    print(f"Failed to fetch poem page: status {resp.status}")
                     return None, None, None
+                html = await resp.text()
 
-                # JSON decode
-                try:
-                    data = await resp.json()
-                except Exception as e:
-                    print(f"Failed to decode JSON: {e}")
-                    return None, None, None
+        title_match = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.IGNORECASE | re.DOTALL)
+        author_match = re.search(r"<p class=\"author\">—\s*(.*?)</p>", html, re.IGNORECASE)
+        poem_match = re.search(r"<div class=\"poem-text\">(.*?)</div>", html, re.IGNORECASE | re.DOTALL)
 
-        # Extract poem
-        poems = data.get("contents", {}).get("poems", [])
-        if poems:
-            poem_data = poems[0]
+        title = title_match.group(1).strip() if title_match else "Untitled"
+        author = author_match.group(1).strip() if author_match else "Unknown"
+        poem_html = poem_match.group(1).strip() if poem_match else ""
 
-        if not poem_data:
-            print("No poem found in API response.")
-            return None, None, None
+        poem_text = re.sub(r"<br\s*/?>", "\n", poem_html)
+        poem_text = re.sub(r"<.*?>", "", poem_text).strip()
 
-        # Fields
-        title = poem_data.get("title", "Untitled")
-        author = (poem_data.get("author") or "Unknown").strip()
-        url_field = poem_data.get("url", "")
+        lines = poem_text.splitlines()
+        max_len = max((len(line) for line in lines), default=10)
+        separator = "-" * max_len
+        pretty = f'“{title}”\nby {author}\n{separator}\n\n{poem_text}'
 
-        # Content can be lines[] or content string
-        raw_content = poem_data.get("content") or poem_data.get("lines", [])
-        poem_text = "\n".join(raw_content) if isinstance(raw_content, list) else str(raw_content)
-
-        # Pretty formatting like Node version
-        max_line_len = max((len(line) for line in poem_text.splitlines()), default=10)
-        separator = "-" * max_line_len
-
-        pretty_block = (
-            f'“{title}”\n'
-            f"by {author}\n"
-            f"{separator}\n\n"
-            f"{poem_text}\n\n"
-            f"({url_field})"
-        )
-
-        # Short intro + Discord-safe chunks
         intro = f"**{title}** by *{author}*"
         chunks = [poem_text[i:i + 1900] for i in range(0, len(poem_text), 1900)]
 
-        # Cache it
-        poem_cache[today] = (intro, chunks, pretty_block)
-        return intro, chunks, pretty_block
+        poem_cache[today] = (intro, chunks, pretty)
+        return intro, chunks, pretty
 
     except Exception as e:
-        print(f"Unexpected poem fetch error: {e}")
+        print(f"💥 Oops, scraping flopped: {e}")
         return None, None, None
 
-
 async def send_poem(target_channel=None):
-    """
-    Send the daily poem into a Discord channel.
-    Falls back to error message if fetching fails.
-    """
     if target_channel is None:
         target_channel = bot.get_channel(POEM_CHANNEL_ID)
-
     if not target_channel:
-        print("Could not find poem channel.")
+        print("Poem channel missing, can’t send poem.")
         return
 
     intro, chunks, pretty = await fetch_poem()
-
     if not intro:
-        await target_channel.send("🚨 An error occurred while fetching the poem.")
+        await target_channel.send("Couldn't fetch today's poem. Sorry!")
         return
 
-    # If everything fits, send as one pretty block
     if pretty and len(pretty) < 1900:
         await target_channel.send(f"```{pretty}```")
     else:
@@ -150,7 +118,6 @@ async def send_poem(target_channel=None):
         for chunk in chunks:
             await target_channel.send(chunk)
             await asyncio.sleep(1.5)
-
 
 @bot.command()
 async def debugpoem(ctx):
@@ -161,10 +128,9 @@ async def debugpoem(ctx):
 
     await ctx.send(f"DEBUG intro: {intro}")
     if pretty:
-        await ctx.send(f"DEBUG pretty (first 500):\n```{pretty[:500]}```")
-
-    for i, chunk in enumerate(chunks):
-        await ctx.send(f"DEBUG chunk {i+1}:\n{chunk[:500]}")
+        await ctx.send(f"DEBUG pretty (first 500 chars):\n```{pretty[:500]}```")
+    for idx, chunk in enumerate(chunks, start=1):
+        await ctx.send(f"DEBUG chunk {idx} (first 500 chars):\n{chunk[:500]}")
 
 @bot.command()
 async def dog(ctx):
