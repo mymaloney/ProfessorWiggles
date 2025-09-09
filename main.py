@@ -56,34 +56,42 @@ async def send_dog():
 
 async def fetch_poem():
     """
-    Scrapes the daily poem from poems.com and returns
-    (intro, chunks, pretty_block).
-    Mimics the scraping logic from sdgluck/daily-poem.
+    Scrapes today's poem from poems.com using BeautifulSoup.
+    Returns (intro, chunks, pretty_block) for Discord posting.
     """
     today = datetime.date.today().isoformat()
     if today in poem_cache:
         return poem_cache[today]
 
-    target_url = "http://poems.com/poem-of-the-day" 
+    URL = "https://poems.com/todays-poem"
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(target_url) as resp:
+            async with session.get(URL, headers={"User-Agent": "Mozilla/5.0"}) as resp:
                 if resp.status != 200:
                     print(f"Failed to fetch poem page: status {resp.status}")
                     return None, None, None
                 html = await resp.text()
 
-        title_match = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.IGNORECASE | re.DOTALL)
-        author_match = re.search(r"<p class=\"author\">—\s*(.*?)</p>", html, re.IGNORECASE)
-        poem_match = re.search(r"<div class=\"poem-text\">(.*?)</div>", html, re.IGNORECASE | re.DOTALL)
+        soup = BeautifulSoup(html, "lxml")
 
-        title = title_match.group(1).strip() if title_match else "Untitled"
-        author = author_match.group(1).strip() if author_match else "Unknown"
-        poem_html = poem_match.group(1).strip() if poem_match else ""
+        # Title
+        title_tag = soup.select_one(".elementor-heading-title")
+        title = title_tag.get_text(strip=True) if title_tag else "Untitled"
 
-        poem_text = re.sub(r"<br\s*/?>", "\n", poem_html)
-        poem_text = re.sub(r"<.*?>", "", poem_text).strip()
+        # Author
+        author_tag = soup.select_one(".daily_poem_author .elementor-shortcode")
+        author = author_tag.get_text(strip=True) if author_tag else "Unknown"
 
+        # Poem content
+        poem_tag = soup.select_one("#daily-poem")
+        if poem_tag:
+            for br in poem_tag.find_all("br"):
+                br.replace_with("\n")
+            poem_text = "\n".join(s.strip() for s in poem_tag.stripped_strings)
+        else:
+            poem_text = ""
+
+        # Format pretty block
         lines = poem_text.splitlines()
         max_len = max((len(line) for line in lines), default=10)
         separator = "-" * max_len
@@ -96,41 +104,8 @@ async def fetch_poem():
         return intro, chunks, pretty
 
     except Exception as e:
-        print(f"💥 Oops, scraping flopped: {e}")
+        print(f"Oops, scraping flopped: {e}")
         return None, None, None
-
-async def send_poem(target_channel=None):
-    if target_channel is None:
-        target_channel = bot.get_channel(POEM_CHANNEL_ID)
-    if not target_channel:
-        print("Poem channel missing, can’t send poem.")
-        return
-
-    intro, chunks, pretty = await fetch_poem()
-    if not intro:
-        await target_channel.send("Couldn't fetch today's poem. Sorry!")
-        return
-
-    if pretty and len(pretty) < 1900:
-        await target_channel.send(f"```{pretty}```")
-    else:
-        await target_channel.send(intro)
-        for chunk in chunks:
-            await target_channel.send(chunk)
-            await asyncio.sleep(1.5)
-
-@bot.command()
-async def debugpoem(ctx):
-    intro, chunks, pretty = await fetch_poem()
-    if not intro:
-        await ctx.send("DEBUG: fetch_poem returned None")
-        return
-
-    await ctx.send(f"DEBUG intro: {intro}")
-    if pretty:
-        await ctx.send(f"DEBUG pretty (first 500 chars):\n```{pretty[:500]}```")
-    for idx, chunk in enumerate(chunks, start=1):
-        await ctx.send(f"DEBUG chunk {idx} (first 500 chars):\n{chunk[:500]}")
 
 @bot.command()
 async def dog(ctx):
