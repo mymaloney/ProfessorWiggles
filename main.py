@@ -43,33 +43,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 scheduler = AsyncIOScheduler()
 
-def html_to_discord_markdown(soup):
-    # Italic: <i> or <em> -> *text*
-    for tag in soup.find_all(['i', 'em']):
-        tag.insert_before('*')
-        tag.insert_after('*')
-        tag.unwrap()
-
-    # Bold: <b> or <strong> -> **text**
-    for tag in soup.find_all(['b', 'strong']):
-        tag.insert_before('**')
-        tag.insert_after('**')
-        tag.unwrap()
-
-    # Underline: <u> -> __text__
-    for tag in soup.find_all('u'):
-        tag.insert_before('__')
-        tag.insert_after('__')
-        tag.unwrap()
-
-    # Strikethrough: <s> or <del> -> ~~text~~
-    for tag in soup.find_all(['s', 'del']):
-        tag.insert_before('~~')
-        tag.insert_after('~~')
-        tag.unwrap()
-
-    return soup
-
 async def send_dog():
     channel = bot.get_channel(CHANNEL_ID)
     if channel:
@@ -81,7 +54,6 @@ async def send_dog():
         except Exception as e:
             print(f"Failed to send dog image: {e}")
 
-# ==== New function to fetch and cache the poem (using poems.one API) ====
 async def fetch_poem():
     today = datetime.date.today().isoformat()
     if today in poem_cache:
@@ -92,11 +64,51 @@ async def fetch_poem():
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 text = await resp.text()
-                print("DEBUG Poems.one raw response:", text)  # ✅ safe to log here
+                print("DEBUG Poems.one raw response:", text)  # ✅ log the full JSON
                 if resp.status != 200:
                     print(f"Failed to fetch poem, status {resp.status}")
                     return None, None, None
-                data = await resp.json()
+
+                # Try to parse as JSON
+                try:
+                    data = await resp.json()
+                except Exception as e:
+                    print(f"Failed to parse JSON: {e}")
+                    return None, None, None
+
+        # Handle possible response structures
+        poem = None
+        if "poem" in data:
+            poem = data["poem"]
+        elif "contents" in data and "poems" in data["contents"]:
+            poems = data["contents"]["poems"]
+            if poems:
+                poem = poems[0]
+
+        if not poem:
+            print("No poem found in API response.")
+            return None, None, None
+
+        # Extract fields safely
+        title = poem.get("title", "Untitled")
+        author = poem.get("author", "Unknown")
+        lines = poem.get("lines", [])
+
+        if isinstance(lines, list):
+            poem_text = "\n".join(lines)
+        else:
+            poem_text = str(lines)
+
+        intro = f"**{title}** by *{author}*"
+        chunks = [poem_text[i:i + 1900] for i in range(0, len(poem_text), 1900)]
+
+        # Cache result for the day
+        poem_cache[today] = (intro, chunks, None)
+        return intro, chunks, None
+
+    except Exception as e:
+        print(f"Error fetching poem: {e}")
+        return None, None, None
 
 
 # ==== Update send_poem to use new fetch_poem ====
