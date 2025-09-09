@@ -81,47 +81,22 @@ async def send_dog():
         except Exception as e:
             print(f"Failed to send dog image: {e}")
 
-async with session.get(url) as resp:
-    text = await resp.text()
-    print("DEBUG Poems.one raw response:", text)
-    data = await resp.json()
-
 # ==== New function to fetch and cache the poem (using poems.one API) ====
 async def fetch_poem():
     today = datetime.date.today().isoformat()
     if today in poem_cache:
         return poem_cache[today]
 
-    url = "https://poems.one/api/poem/"   # Poem of the Day endpoint
+    url = "https://poems.one/api/poem/"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
+                text = await resp.text()
+                print("DEBUG Poems.one raw response:", text)  # ✅ safe to log here
                 if resp.status != 200:
                     print(f"Failed to fetch poem, status {resp.status}")
                     return None, None, None
                 data = await resp.json()
-
-        # Poems.one JSON structure: {"status":..., "contents":{"poems":[...]}}
-        poems = data.get("contents", {}).get("poems", [])
-        if not poems:
-            return None, None, None
-
-        poem = poems[0]  # Poem of the day is the first one
-        title = poem.get("title", "Untitled")
-        author = poem.get("author", "Unknown")
-        lines = poem.get("lines", [])
-        poem_text = "\n".join(lines)
-
-        intro = f"**{title}** by *{author}*"
-        chunks = [poem_text[i:i + 1900] for i in range(0, len(poem_text), 1900)]
-
-        # Cache result
-        poem_cache[today] = (intro, chunks, None)
-        return intro, chunks, None
-
-    except Exception as e:
-        print(f"Error fetching poem: {e}")
-        return None, None, None
 
 
 # ==== Update send_poem to use new fetch_poem ====
