@@ -131,6 +131,16 @@ async def send_poem(target_channel=None):
         await asyncio.sleep(1.5)
 
 @bot.command()
+async def debugpoem(ctx):
+    intro, chunks, _ = await fetch_poem()
+    if not intro:
+        await ctx.send("DEBUG: fetch_poem returned None")
+        return
+    await ctx.send(intro)
+    for chunk in chunks:
+        await ctx.send(chunk[:500])  # shorter chunks for debug
+
+@bot.command()
 async def dog(ctx):
     # Send dog image to channel where command was issued
     channel = ctx.channel
