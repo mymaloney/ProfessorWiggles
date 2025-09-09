@@ -9,7 +9,7 @@ import random
 from zoneinfo import ZoneInfo
 
 TOKEN = os.environ["TOKEN"]
-CHANNEL_ID = 1362449863513473339  # your main channel
+CHANNEL_ID = 1362449863513473339  # replace with your channel ID
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -84,6 +84,7 @@ async def ping_for_poem():
     channel = bot.get_channel(CHANNEL_ID)
     if channel:
         await channel.send("@maloneyman Time for the daily poem!")
+        print("✅ Sent daily ping for poem.")
 
 @bot.event
 async def on_ready():
