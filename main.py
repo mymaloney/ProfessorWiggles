@@ -97,37 +97,39 @@ async def fetch_poem():
                 poem_html = await poem_resp.text()
                 poem_soup = BeautifulSoup(poem_html, 'html.parser')
 
-                # Title
+                # --- Title ---
                 title_tag = poem_soup.select_one("h4.type-gamma p")
                 title = title_tag.get_text(strip=True) if title_tag else "Untitled"
 
-                # Author
+                # --- Author ---
                 author_tag = poem_soup.select_one("div.type-kappa")
                 if author_tag:
-                    # Look for last <span>, fallback to raw text
-                    span = author_tag.find_all("span")
-                    author = span[-1].get_text(strip=True) if span else author_tag.get_text(strip=True).replace("By", "").strip()
+                    spans = author_tag.find_all("span")
+                    if spans:
+                        author = spans[-1].get_text(strip=True)
+                    else:
+                        author = author_tag.get_text(strip=True).replace("By", "").strip()
                 else:
                     author = "Unknown"
 
-                # Poem body
+                # --- Poem body ---
                 poem_div = poem_soup.select_one("div.rich-text.col-span-full")
                 if not poem_div:
                     return None, None, poem_url
 
-                # Normalize breaks
+                # Replace <br> with newlines
                 for br in poem_div.find_all("br"):
                     br.replace_with("\n")
 
-                # Clean & normalize spaces
-                for elem in poem_div.find_all(text=True):
+                # Normalize spaces
+                for elem in poem_div.find_all(string=True):
                     elem.replace_with(elem.replace("\xa0", " "))
 
                 poem_text = poem_div.get_text("\n", strip=True)
+
                 intro = f"**{title}** by *{author}*\n<{poem_url}>"
                 chunks = [poem_text[i:i+1900] for i in range(0, len(poem_text), 1900)]
 
-                # Cache result
                 poem_cache[today] = (intro, chunks, poem_url)
                 return intro, chunks, poem_url
 
