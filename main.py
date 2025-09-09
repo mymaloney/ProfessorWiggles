@@ -81,8 +81,11 @@ async def send_dog():
         except Exception as e:
             print(f"Failed to send dog image: {e}")
 
+async with session.get(url) as resp:
+    text = await resp.text()
+    print("DEBUG Poems.one raw response:", text)
+    data = await resp.json()
 
-# ==== New function to fetch and cache the poem ====
 # ==== New function to fetch and cache the poem (using poems.one API) ====
 async def fetch_poem():
     today = datetime.date.today().isoformat()
