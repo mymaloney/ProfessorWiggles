@@ -59,28 +59,28 @@ async def fetch_poem():
     if today in poem_cache:
         return poem_cache[today]
 
-    url = "https://poems.one/api/poem/"
+    url = "https://poems.one/api/poem/"  # Poems API endpoint
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 text = await resp.text()
-                print("DEBUG Poems.one raw response:", text)  # ✅ log the full JSON
+                print("DEBUG Poems.one raw response:", text)  # ✅ full JSON log
+
                 if resp.status != 200:
                     print(f"Failed to fetch poem, status {resp.status}")
                     return None, None, None
 
-                # Try to parse as JSON
+                # Parse JSON
                 try:
                     data = await resp.json()
                 except Exception as e:
                     print(f"Failed to parse JSON: {e}")
                     return None, None, None
 
-        # Handle possible response structures
+        # Extract poem safely
         poem = None
-        if "poem" in data:
-            poem = data["poem"]
-        elif "contents" in data and "poems" in data["contents"]:
+        if "contents" in data and "poems" in data["contents"]:
             poems = data["contents"]["poems"]
             if poems:
                 poem = poems[0]
@@ -89,20 +89,19 @@ async def fetch_poem():
             print("No poem found in API response.")
             return None, None, None
 
-        # Extract fields safely
+        # Extract fields with defaults
         title = poem.get("title", "Untitled")
         author = poem.get("author", "Unknown")
         lines = poem.get("lines", [])
 
-        if isinstance(lines, list):
-            poem_text = "\n".join(lines)
-        else:
-            poem_text = str(lines)
+        # Convert lines to text
+        poem_text = "\n".join(lines) if isinstance(lines, list) else str(lines)
 
         intro = f"**{title}** by *{author}*"
+        # Split into chunks for long messages
         chunks = [poem_text[i:i + 1900] for i in range(0, len(poem_text), 1900)]
 
-        # Cache result for the day
+        # Cache result
         poem_cache[today] = (intro, chunks, None)
         return intro, chunks, None
 
@@ -111,7 +110,7 @@ async def fetch_poem():
         return None, None, None
 
 
-# ==== Update send_poem to use new fetch_poem ====
+# ==== Send daily poem ====
 async def send_poem(target_channel=None):
     if target_channel is None:
         target_channel = bot.get_channel(POEM_CHANNEL_ID)
