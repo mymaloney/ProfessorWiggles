@@ -83,61 +83,45 @@ async def send_dog():
 
 
 # ==== New function to fetch and cache the poem ====
+# ==== New function to fetch and cache the poem (using poems.one API) ====
 async def fetch_poem():
     today = datetime.date.today().isoformat()
     if today in poem_cache:
         return poem_cache[today]
 
+    url = "https://poems.one/api/poem/"   # Poem of the Day endpoint
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://www.poetryfoundation.org/poems/poem-of-the-day", allow_redirects=True) as resp:
-                poem_url = str(resp.url)
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    print(f"Failed to fetch poem, status {resp.status}")
+                    return None, None, None
+                data = await resp.json()
 
-            async with session.get(poem_url) as poem_resp:
-                poem_html = await poem_resp.text()
-                poem_soup = BeautifulSoup(poem_html, 'html.parser')
+        # Poems.one JSON structure: {"status":..., "contents":{"poems":[...]}}
+        poems = data.get("contents", {}).get("poems", [])
+        if not poems:
+            return None, None, None
 
-                # --- Title ---
-                title_tag = poem_soup.select_one("h4.type-gamma p")
-                title = title_tag.get_text(strip=True) if title_tag else "Untitled"
+        poem = poems[0]  # Poem of the day is the first one
+        title = poem.get("title", "Untitled")
+        author = poem.get("author", "Unknown")
+        lines = poem.get("lines", [])
+        poem_text = "\n".join(lines)
 
-                # --- Author ---
-                author_tag = poem_soup.select_one("div.type-kappa")
-                if author_tag:
-                    spans = author_tag.find_all("span")
-                    if spans:
-                        author = spans[-1].get_text(strip=True)
-                    else:
-                        author = author_tag.get_text(strip=True).replace("By", "").strip()
-                else:
-                    author = "Unknown"
+        intro = f"**{title}** by *{author}*"
+        chunks = [poem_text[i:i + 1900] for i in range(0, len(poem_text), 1900)]
 
-                # --- Poem body ---
-                poem_div = poem_soup.select_one("div.rich-text.col-span-full")
-                if not poem_div:
-                    return None, None, poem_url
-
-                # Replace <br> with newlines
-                for br in poem_div.find_all("br"):
-                    br.replace_with("\n")
-
-                # Normalize spaces
-                for elem in poem_div.find_all(string=True):
-                    elem.replace_with(elem.replace("\xa0", " "))
-
-                poem_text = poem_div.get_text("\n", strip=True)
-
-                intro = f"**{title}** by *{author}*\n<{poem_url}>"
-                chunks = [poem_text[i:i+1900] for i in range(0, len(poem_text), 1900)]
-
-                poem_cache[today] = (intro, chunks, poem_url)
-                return intro, chunks, poem_url
+        # Cache result
+        poem_cache[today] = (intro, chunks, None)
+        return intro, chunks, None
 
     except Exception as e:
         print(f"Error fetching poem: {e}")
         return None, None, None
 
-# ==== Update send_poem to use the cache ====
+
+# ==== Update send_poem to use new fetch_poem ====
 async def send_poem(target_channel=None):
     if target_channel is None:
         target_channel = bot.get_channel(POEM_CHANNEL_ID)
@@ -145,7 +129,7 @@ async def send_poem(target_channel=None):
         print("Poem channel not found.")
         return
 
-    intro, chunks, poem_url = await fetch_poem()
+    intro, chunks, _ = await fetch_poem()
 
     if not intro:
         await target_channel.send("An error occurred while fetching the poem.")
@@ -154,7 +138,7 @@ async def send_poem(target_channel=None):
     await target_channel.send(intro)
     for chunk in chunks:
         await target_channel.send(chunk)
-        await asyncio.sleep(1.5)  # Discord rate limit is ~5 requests/5 sec globally; this is safe
+        await asyncio.sleep(1.5)
 
 @bot.command()
 async def dog(ctx):
