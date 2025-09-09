@@ -4,37 +4,12 @@ import aiohttp
 from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from bs4 import BeautifulSoup
-from flask import Flask
-import threading
-import datetime
 import asyncio
 import random
-import ssl
-
-poem_cache = {}
-
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "Bot is running."
-
-def run_web():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
-
-# Start the keep-alive web server in a thread
-threading.Thread(target=run_web).start()
-
-# Use zoneinfo for Python 3.9+, else fallback to pytz
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    from pytz import timezone as ZoneInfo
+from zoneinfo import ZoneInfo
 
 TOKEN = os.environ["TOKEN"]
-CHANNEL_ID = 1362449863513473339
-POEM_CHANNEL_ID = 1362377128556888164
+CHANNEL_ID = 1362449863513473339  # your main channel
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -42,95 +17,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 scheduler = AsyncIOScheduler()
 
-# Create SSL context that ignores certificate errors (for hosted environments)
-ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
-
-async def send_dog():
-    channel = bot.get_channel(CHANNEL_ID)
-    if channel:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://dog.ceo/api/breeds/image/random") as resp:
-                    data = await resp.json()
-                    await channel.send(data["message"])
-        except Exception as e:
-            print(f"Failed to send dog image: {e}")
-
-async def fetch_poem():
-    """
-    Scrapes today's poem from poems.com using BeautifulSoup.
-    Returns (intro, chunks, pretty_block) for Discord posting.
-    """
-    today = datetime.date.today().isoformat()
-    if today in poem_cache:
-        return poem_cache[today]
-
-    URL = "https://poems.com/todays-poem"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    }
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(URL, headers=headers, ssl=ssl_context) as resp:
-                print(f"[DEBUG] Fetch status: {resp.status}")
-                html = await resp.text()
-                print(f"[DEBUG] HTML snippet: {html[:500]}")  # Log first 500 chars for debugging
-
-        soup = BeautifulSoup(html, "lxml")
-
-        # Title
-        title_tag = soup.select_one(".elementor-heading-title")
-        title = title_tag.get_text(strip=True) if title_tag else "Untitled"
-
-        # Author
-        author_tag = soup.select_one(".daily_poem_author .elementor-shortcode")
-        author = author_tag.get_text(strip=True) if author_tag else "Unknown"
-
-        # Poem content
-        poem_tag = soup.select_one("#daily-poem")
-        if poem_tag:
-            for br in poem_tag.find_all("br"):
-                br.replace_with("\n")
-            poem_text = "\n".join(s.strip() for s in poem_tag.stripped_strings)
-        else:
-            print("[WARNING] Poem content not found, sending fallback text.")
-            poem_text = "Today's poem could not be fetched. 😢"
-
-        # Format pretty block
-        lines = poem_text.splitlines()
-        max_len = max((len(line) for line in lines), default=10)
-        separator = "-" * max_len
-        pretty = f'“{title}”\nby {author}\n{separator}\n\n{poem_text}'
-
-        intro = f"**{title}** by *{author}*"
-        chunks = [poem_text[i:i + 1900] for i in range(0, len(poem_text), 1900)]
-
-        poem_cache[today] = (intro, chunks, pretty)
-        return intro, chunks, pretty
-
-    except Exception as e:
-        print(f"Oops, scraping flopped: {e}")
-        fallback_text = "Today's poem could not be fetched due to an error. 😢"
-        return "Poem Unavailable", [fallback_text], fallback_text
-
-async def send_poem(channel=None):
-    if channel is None:
-        channel = bot.get_channel(POEM_CHANNEL_ID)
-    if channel is None:
-        print("Poem channel not found!")
-        return
-
-    intro, chunks, pretty = await fetch_poem()
-    if not chunks:
-        await channel.send("Failed to fetch today's poem.")
-        return
-
-    for chunk in chunks:
-        await channel.send(chunk)
-
+# --- Dog Command ---
 @bot.command()
 async def dog(ctx):
     channel = ctx.channel
@@ -142,20 +29,21 @@ async def dog(ctx):
     except Exception as e:
         await channel.send(f"Failed to fetch dog image: {e}")
 
+# --- Cat Command ---
 @bot.command()
 async def cat(ctx):
     url = "https://api.thecatapi.com/v1/images/search"
     headers = {"x-api-key": "live_IVLwPo7y4QmgTfaX4LbCUEkfVhKxJHjgV6IE0PhHPp2oYx4hqRC1qSb9q4nz6NAI"}  # Optional
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as resp:
-            data = await resp.json()
-            cat_url = data[0]["url"]
-            await ctx.send(cat_url)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                data = await resp.json()
+                cat_url = data[0]["url"]
+                await ctx.send(cat_url)
+    except Exception as e:
+        await ctx.send(f"Failed to fetch cat image: {e}")
 
-@bot.command()
-async def poem(ctx):
-    await send_poem(ctx.channel)
-
+# --- Grade Command ---
 @bot.command()
 async def grade(ctx):
     if not ctx.message.attachments:
@@ -163,7 +51,6 @@ async def grade(ctx):
         return
 
     grading_msg = await ctx.send("Grading...")
-
     wait_time = random.randint(1, 360)
     await asyncio.sleep(wait_time)
 
@@ -177,26 +64,34 @@ async def grade(ctx):
         "Fine, but this is strike two. B plus.",
         "My god... it so shit I shit. No good. F.",
         "I'm calling the Dean. D. For Dean.",
+        "Wow. Truly inspired mediocrity. D.",
         "I mean… you tried. A for effort. But C.",
         "It made me laugh.... I mean, really, laugh... A plus.",
         "Hate has no place here, youngster. F minus.",
+        "Creative? Yes. Good? Debatable. C-."
         "It's giving.... A plus.",
+        "This made me smile! :) A.",
+        "Remarkable effort! Keep it up. B plus.",
+        "I can tell you care, and it shows. A.",
         "Innoffensive. D."
     ]
 
     response = random.choice(grades)
     await grading_msg.edit(content=response)
 
+# --- Scheduled Ping ---
+async def ping_for_poem():
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel:
+        await channel.send("@maloneyman Time for the daily poem!")
+
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
-    print("🔁 Scheduler starting...")
-
     eastern = ZoneInfo("America/New_York")
 
-    scheduler.add_job(send_dog, CronTrigger(hour=6, minute=0, timezone=eastern))
-    scheduler.add_job(send_poem, CronTrigger(hour=6, minute=5, timezone=eastern))
-
+    # Schedule daily ping at 6 AM
+    scheduler.add_job(ping_for_poem, CronTrigger(hour=6, minute=0, timezone=eastern))
     scheduler.start()
     print("✅ Scheduler started.")
 
