@@ -7,6 +7,8 @@ from apscheduler.triggers.cron import CronTrigger
 import asyncio
 import random
 from zoneinfo import ZoneInfo
+from flask import Flask
+import threading
 
 TOKEN = os.environ["TOKEN"]
 CHANNEL_ID = 1362449863513473339  # replace with your channel ID
@@ -16,6 +18,19 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 scheduler = AsyncIOScheduler()
+
+# --- Flask keep-alive ---
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot is running."
+
+def run_web():
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
+# Run Flask in a separate thread
+threading.Thread(target=run_web).start()
 
 # --- Dog Command ---
 @bot.command()
@@ -68,7 +83,7 @@ async def grade(ctx):
         "I mean… you tried. A for effort. But C.",
         "It made me laugh.... I mean, really, laugh... A plus.",
         "Hate has no place here, youngster. F minus.",
-        "Creative? Yes. Good? Debatable. C-."
+        "Creative? Yes. Good? Debatable. C-.",
         "It's giving.... A plus.",
         "This made me smile! :) A.",
         "Remarkable effort! Keep it up. B plus.",
