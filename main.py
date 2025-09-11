@@ -11,8 +11,8 @@ from flask import Flask
 import threading
 
 TOKEN = os.environ["TOKEN"]
-CHANNEL_ID = 1362449863513473339  # replace with your channel ID
-
+CHANNEL_ID = 1362377128556888164  # replace with your channel ID
+DOG_CHANNEL = 1362449863513473339
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -101,6 +101,18 @@ async def ping_for_poem():
         await channel.send("@maloneyman Time for the daily poem!")
         print("✅ Sent daily ping for poem.")
 
+async def daily_dog():
+    channel = bot.get_channel(DOG_CHANNEL)
+    if channel:
+        await channel.
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://dog.ceo/api/breeds/image/random") as resp:
+                    data = await resp.json()
+                    await channel.send(data["message"])
+        except Exception as e:
+            await channel.send(f"Failed to fetch dog image: {e}")
+
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
@@ -108,6 +120,7 @@ async def on_ready():
 
     # Schedule daily ping at 6 AM
     scheduler.add_job(ping_for_poem, CronTrigger(hour=6, minute=0, timezone=eastern))
+    scheduler.add_job(daily_dog, CronTrigger(hour=6, minute=0, timezone=eastern))
     scheduler.start()
     print("✅ Scheduler started.")
 
