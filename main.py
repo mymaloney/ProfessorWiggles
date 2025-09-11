@@ -104,7 +104,6 @@ async def ping_for_poem():
 async def daily_dog():
     channel = bot.get_channel(DOG_CHANNEL)
     if channel:
-        await channel.
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get("https://dog.ceo/api/breeds/image/random") as resp:
